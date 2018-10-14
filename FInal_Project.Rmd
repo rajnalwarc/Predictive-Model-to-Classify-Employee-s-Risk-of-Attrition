@@ -1,0 +1,370 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+```{r}
+
+###I downloaded the CSV file from Kaggle "HR-Analytics". data contains the information about employees which are best and leaving the company. Company wants to find out why good employees are leaving the company and whom should they retain.   
+
+HR<-read.csv(file="C:/Users/CK/Documents/Intro to Data Mining and Machine Learning/Final Project/HR_comma_sep.csv", header = TRUE)
+
+HR
+head(HR)
+
+str(HR)
+
+summary(HR)
+### through summary we can say that the satisfaction level around employees is around 62% and number of projects they are working is around 4, and evaluation of employees is at 71% 
+
+
+### corelation analysis
+
+#install.packages("magrittr")
+
+library(dplyr)
+
+
+### with corrgram we can say that the blue color signifies the most corelated variable and red color least significant variable
+
+### 
+
+### Detection of outliers
+
+boxplot(HR$satisfaction_level) # no outliers
+
+boxplot(HR$last_evaluation) # no outliers
+
+boxplot(HR$number_project) # no outliers
+
+boxplot(HR$average_montly_hours) # no outliers
+
+boxplot(HR$time_spend_company) # no outliers
+
+### here we can say that after looking at the boxplot outliers are present in time_spend_company
+
+boxplot(HR$Work_accident)
+
+### here outliers are present in work_accident
+
+boxplot(HR$left)
+
+### outliers are present in the left column but as its important data we cannot eliminate it
+
+boxplot(HR$promotion_last_5years)
+
+### above column contains outliers 
+
+#boxplot(HR$sales)
+
+#boxplot(HR$salary) 
+
+### above two columns are character type so no outliers
+
+### Exploratory data plots
+
+library(ggplot2)
+
+ggplot(HR)+ geom_bar(mapping = aes(x=satisfaction_level))
+
+### creating a visualization with respect to the response variable 
+
+
+### for satisfaction level 
+
+HR_left <- HR%>% filter(left==1) ### selecting a dataframe containing employees that have left the company to consider effect of response variable on different features
+
+ggplot(HR_left)+ geom_bar(mapping = aes(x=last_evaluation))
+
+### Here from above plot we can see that employees with lower evaluation are leaving the company , but company also loosing the good employees too. So company should retain those employees
+
+ggplot(HR_left)+ geom_bar(mapping = aes(x=satisfaction_level))
+
+### Here from above plot we can say that employees with lower satisfaction level are tend to leave 
+
+ggplot(HR_left)+ geom_bar(mapping = aes(x=average_montly_hours))
+
+### employees with the less working hours and employees with more working hours are more likely to leave the company
+
+ggplot(data = HR_left) + 
+  geom_point(mapping = aes(x = number_project, y = satisfaction_level))
+
+### from above plot we can say that the number of employees with the good valuation and higher satisfaction level are leaving the company more as compared to others
+
+ggplot(data = HR_left) + 
+  geom_point(mapping = aes(x = satisfaction_level, y = average_montly_hours))
+
+### from above plot we can say that employees are leaving with the more working hours and more satisfaction level
+
+### Data Cleaning and shaping
+
+### Data Imputation
+
+is.na(HR)
+
+## as there are no null values in dataset so, no data imputation
+
+### Normalization and standardization
+#install.packages("clusterSim")
+library(clusterSim)
+
+HR_norm <-data.Normalization (HR,type="n0",normalization="average_montly_hours")
+
+
+HR_No<-scale(HR_N) # to normalize whole df without categorical variables
+
+summary(HR_norm) #### after comparing original data set and normalized on ewe can see that the data is already normalized
+summary(HR)
+
+### n0 is for normalization
+
+HR_std<-data.Normalization (HR,type="n1",normalization="average_montly_hours")
+
+
+summary(HR_std)
+
+### n1=standardization
+
+
+### Dummy codes 
+library(forecast)
+set.seed(1)
+
+HR_Data <- data.frame(sex = sample(c("male","female"), 14999, replace = TRUE))
+
+binary_dummy<-model.matrix( ~ sex - 1, data = HR_Data)
+binary_dummy
+
+#### I have created dummy variables male and female
+
+
+
+### new derived features
+
+library(forecast)
+library(e1071)
+library(ade4)
+
+category <- HR[c("sales","salary")]
+### as above variables as characte so , converting them to binary using following function 
+
+one2n<- acm.disjonctif(category)
+
+
+### creating a final data frame
+
+HR_N<- HR[,-(9:10)]
+
+### ommitting character variables from main df and selecting converted one
+HR_Final<- data.frame(HR_N,one2n, binary_dummy)
+
+
+### PCA
+
+### to see the co relation between variables carrying out the PCA analysis
+
+HR_pca<- prcomp(HR_Final, scale. = TRUE) 
+
+
+
+screeplot(prcomp(HR_Final, scale. = TRUE))
+
+summary(HR_pca)
+
+
+#### creation of training and test data
+
+library(caret)
+HR_sample <- sample(2, 
+                     nrow(HR),
+                     replace = T,
+                     prob = c(0.7,0.3)) ### splitting the dataset in training and testing 
+
+HR_train <- HR[HR_sample==1,]
+HR_test <- HR[HR_sample==2,]
+
+summary(HR_test)
+summary(HR_train)
+
+
+# cross-validation
+
+HR_train$left <- as.factor(HR_train$left) ### setting the variable as factor
+
+train_control<- trainControl(method="cv", )
+
+head(train_control)
+
+### Building a tree model 
+
+library("rpart") ## loading the necessary libraries 
+library("rpart.plot")
+
+# training the rpart model 
+
+library(C50)
+
+HR_rpartmodel<- train(left ~ ., data=HR_train, trControl=train_control, method="rpart", metric="Accuracy")
+
+# making the predictions 
+
+predictions<- predict(HR_rpartmodel,HR_train)
+
+HR_model_tree<- cbind(HR_train,predictions)
+
+# summarize results
+
+confusionMatrix<- confusionMatrix(HR_model_tree$predictions,HR_model_tree$left)
+confusionMatrix
+
+### Naive Bayes
+
+library(e1071)
+###install.packages("rminer")
+
+library(rminer)
+
+### training the Naive bayes model on the train data set
+
+HR_nb <- train(left~., data=HR_train, trControl=train_control, method="nb")
+
+### predictions
+
+predictions_nb <- predict(HR_nb, HR_train)
+
+HR_nb_model <- cbind(HR_train, predictions_nb)
+
+### summarize
+
+confusionMatrix_nb <- confusionMatrix(HR_nb_model$predictions_nb, HR_nb_model$left)
+
+confusionMatrix_nb
+
+
+### logistic regression
+
+### training the model on the train dataset
+
+HR_lr <- train(left~., data=HR_train, trControl=train_control, method="LogitBoost")
+# make predictions
+
+predictions_lr<- predict(HR_lr,HR_train)
+
+HR_lr_model <- cbind(HR_train,predictions_lr)
+# summarize results
+
+confusionMatrix_lr<- confusionMatrix(HR_lr_model$predictions, HR_lr_model$left)
+
+confusionMatrix_lr
+
+
+install.packages("Metrics")
+
+
+### buidlingn the KNN classification model 
+library(caret)
+
+knn_fit <- train(left ~., data = HR_train, method = "knn",
+ trControl= train_control,
+ preProcess = c("center", "scale"),
+ tuneLength = 10)
+
+knn_fit
+
+### tuning the model by tune length of the from 10 to 20
+library(caret)
+
+knn_fit_tune <- train(left ~., data = HR_train, method = "knn",
+ trControl= train_control,
+ preProcess = c("center", "scale"),
+ tuneLength = 20)
+
+knn_fit_tune
+
+### after increasing the tune length from 10 to 20 accuracy increased from 
+
+
+###using random forest to see the most important variables with respect to the response variable
+
+library(randomForest)
+
+randomforest<-randomForest(left ~ satisfaction_level+last_evaluation+number_project+average_montly_hours+time_spend_company+Work_accident+promotion_last_5years+sales+salary, HR_train, ntree=500, trcontrol=train_control)
+
+randomforest
+
+
+importance(randomforest) #### through this command we can lay out the mmost important variables with respect to response variable and they are; satisfaction level, last_evaluation, number_project, avergae_montly_hours and time_spend_company
+
+### comparision of model accuracy with dotplot
+
+accuracy <- resamples(list(rpart=HR_rpartmodel, NaiveBayes= HR_nb, LR= HR_lr, KNN=knn_fit_tune))
+
+### checking the accuracy for 4 different models
+summary(accuracy)
+
+dotplot(accuracy) ### plotting the accuracy for 4 different models
+
+### Ensmebling the model 
+library(randomForest)
+library(caret)
+library(caretEnsemble)
+
+Model_list <- c('rpart', 'nb', 'knn', 'LogitBoost')
+
+set.seed(10)
+
+models <- caretList(left~., data=HR_train, trControl=train_control, methodList=Model_list)
+
+res_mod <- resamples(models)
+
+summary(res_mod)
+dotplot(res_mod)
+
+### by looking at the accuaracy values we can see that logistic regression model is best among the all 4 models
+
+
+### Using the test set for best fit model, after seeing the accuracy and checking the kappa of different models, I came to conclusion that logistic regression model is best with accuaracy of 95% and kappa of 84%
+
+
+HR_lr_test = glm(left ~ ., family=binomial(logit), data=HR_train) ### glm is used to fit generilized linear moldels
+
+
+EmployeemayLeave=predict(logreg,newdata=HR_test,type="response") ### to predict which employee may leave in order to retain them
+
+Employeeattrition = data.frame(EmployeemayLeave) ### adding data of possible leaving employees to new data frame
+
+Employeeattrition$performance=HR_test$last_evaluation ###  adding performance as a parameter in the Employeeattrition data frame
+
+plot(Employeeattrition$EmployeemayLeave,Employeeattrition$performance)
+
+#### Installing the package DT
+
+library(DT)
+
+Employeeattrition$retain = Employeeattrition$performance*Employeeattrition$EmployeemayLeave
+
+### assigning data obtained form above to new variable so, that the list of employees that we should retain should be in order
+
+Employeeretainlist = Employeeattrition[order(Employeeattrition$retain ,decreasing = TRUE),]
+
+### ordering the list according to performance so, that top performed employee will be on top of the list
+
+Employeeretainlist <- head(Employeeretainlist, n=500) ### selecting a top 500 employees according to the performance 
+
+datatable(Employeeretainlist)
+
+### Datatable function gives us the list of top 500 employees that company should retain
+
+```
+
